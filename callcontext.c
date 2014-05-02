@@ -120,45 +120,6 @@ lookup_digest(DL_digest *digest, int *new)
 }
 
 
-static int
-addr2line(const char *fname, uintptr_t offset, char *buf, size_t size)
-{ char cmd[MAXCMD];
-
-  if ( snprintf(cmd, size, "addr2line -fe \"%s\" %p",
-		fname, (void*)offset) < size )
-  { FILE *fd;
-
-    if ( (fd=popen(cmd, "r")) )
-    { int c;
-      char *ebuf = &buf[size-1];
-      char *o = buf;
-      int nl = 0;
-
-      while((c=fgetc(fd)) != EOF && o<ebuf)
-      { if ( c == '\n' )
-	{ const char *sep = "() at ";
-	  nl++;
-
-	  if ( nl == 1 && o+strlen(sep) < ebuf)
-	  { strcpy(o, sep);
-	    o += strlen(sep);
-	  }
-	} else
-	{ *o++ = c;
-	}
-      }
-
-      *o = '\0';
-
-      fclose(fd);
-      return o > buf;
-    }
-  }
-
-  return FALSE;
-}
-
-
 static void
 print_calling_context(FILE *fd, int id, void **ret_addresses, int depth)
 { size_t i;
@@ -177,17 +138,8 @@ print_calling_context(FILE *fd, int id, void **ret_addresses, int depth)
     { uintptr_t offset = (uintptr_t)addr - (uintptr_t)info.dli_fbase;
 
       if ( info.dli_fname )
-      { char buf[512];
-
-	if ( strstr(info.dli_fname, ".so") &&
-	     addr2line(info.dli_fname, offset, buf, sizeof(buf)) )
-	  fprintf(fd, "'%s'", buf);
-	else if ( info.dli_sname )
-	  fprintf(fd, "'%s'('%s'+%p)\n",
-		   info.dli_fname, info.dli_sname, (void*)(addr-info.dli_saddr));
-	else
-	  fprintf(fd, "'%s'(+%p)\n",
-		   info.dli_fname, (void*)offset);
+      { fprintf(fd, "'%s'(%p)\n",
+		info.dli_fname, (void*)offset);
       } else
       { fprintf(fd, "??");
       }
