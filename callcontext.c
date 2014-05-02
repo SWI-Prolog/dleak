@@ -156,7 +156,7 @@ print_calling_context(FILE *fd, int id, void **ret_addresses, int depth)
 
 
 int
-DL_calling_context(int depth)
+DL_calling_context(FILE *logfd, int depth)
 { void *buffer[depth];
   void **addrs = buffer+1;
   int d;
@@ -174,7 +174,7 @@ DL_calling_context(int depth)
 
     if ( (c=lookup_digest(&digest, &new)) )
     { if ( new )
-	print_calling_context(stderr, c->id, addrs, d);
+	print_calling_context(logfd, c->id, addrs, d);
       return c->id;
     }
   }

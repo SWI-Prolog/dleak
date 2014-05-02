@@ -17,6 +17,7 @@
 static int   DL_context_depth = 5;
 static FILE *logfd;
 static pthread_mutex_t locklogfd = PTHREAD_MUTEX_INITIALIZER;
+static __thread int no_hook = 0;
 
 static void* (*callocp)(size_t,size_t);
 static void* (*mallocp)(size_t);
@@ -44,14 +45,15 @@ init(void)
   reallocp  = (void*(*)(void*,size_t)) dlsym(RTLD_NEXT, "realloc");
   freep     = (void (*)(void *))       dlsym(RTLD_NEXT, "free");
 
-  logfd = stderr;
+  no_hook = TRUE;
+  logfd = fopen("dleak.log", "w");
+  no_hook = FALSE;
+
   unsetenv("LD_PRELOAD");		/* do not inject in sub-processes */
 #ifdef EXIT_DUMP_CONTEXTS
   atexit(dump_contexts);
 #endif
 }
-
-static __thread int no_hook = 0;
 
 void *
 malloc(size_t len)
@@ -62,7 +64,7 @@ malloc(size_t len)
     int cctx;
 
     no_hook = TRUE;
-    cctx = DL_calling_context(DL_context_depth);
+    cctx = DL_calling_context(logfd, DL_context_depth);
     ptr = (*mallocp)(len);
     DL_locklog();
     fprintf(logfd, "malloc(%d,%ld,%p).\n", cctx, (long)len, ptr);
@@ -101,7 +103,7 @@ calloc(size_t nmemb, size_t size)
     int cctx;
 
     no_hook = TRUE;
-    cctx = DL_calling_context(DL_context_depth);
+    cctx = DL_calling_context(logfd, DL_context_depth);
     ptr = (*callocp)(nmemb, size);
     DL_locklog();
     fprintf(logfd, "calloc(%d,%ld,%ld,%p).\n",
@@ -123,7 +125,7 @@ realloc(void *ptr, size_t size)
     int cctx;
 
     no_hook = TRUE;
-    cctx = DL_calling_context(DL_context_depth);
+    cctx = DL_calling_context(logfd, DL_context_depth);
     nptr = (*reallocp)(ptr, size);
     DL_locklog();
     fprintf(logfd, "realloc(%d,%p,%ld,%p).\n", cctx, ptr, (long)size, nptr);
@@ -143,7 +145,7 @@ free(void *ptr)
   { int cctx;
 
     no_hook = TRUE;
-    cctx = DL_calling_context(DL_context_depth);
+    cctx = DL_calling_context(logfd, DL_context_depth);
     (*freep)(ptr);
     DL_locklog();
     fprintf(logfd, "free(%d,%p).\n", cctx, ptr);
