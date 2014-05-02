@@ -2,6 +2,7 @@
 #include <malloc.h>
 #include <dlfcn.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <assert.h>
 #include "callcontext.h"
 
@@ -103,9 +104,7 @@ realloc(void *ptr, size_t size)
 
 void
 free(void *ptr)
-{ void *r;
-
-  if ( no_hook )
+{ if ( no_hook )
   { (*freep)(ptr);
   } else
   { no_hook = TRUE;
