@@ -1,6 +1,16 @@
+#!/home/janw/bin/swipl
+
+:- set_prolog_flag(verbose, silent).
 :- use_module(library(pairs)).
 :- use_module(library(apply)).
 :- use_module(library(lists)).
+
+:- initialization
+	main, halt.
+
+main :-
+	current_prolog_flag(argv, [File]),
+	dleak(File).
 
 dleak(File) :-
 	cleanup,
