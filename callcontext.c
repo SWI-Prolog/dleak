@@ -5,9 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <sys/mman.h>
 #include "callcontext.h"
 #include "md5.h"
-#include "pthread.h"
+#include <pthread.h>
 
 #ifndef TRUE
 #define TRUE  1
@@ -47,6 +48,33 @@ static int    debug_level = 1;
 static char *digest_chars(DL_digest *digest);
 #endif
 
+#define CHUNK_SIZE 8192
+static char    *our_chunk;
+static size_t  our_left;
+
+static void *
+our_malloc(size_t size)
+{ void *ptr;
+
+  size = ((size+sizeof(void*)-1)/sizeof(void*))*sizeof(void*);
+
+  if ( our_left < size )
+  { our_chunk = mmap(NULL, CHUNK_SIZE, (PROT_READ|PROT_WRITE),
+		     MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
+    if ( MAP_FAILED == our_chunk )
+    { perror("mmap");
+      abort();
+    }
+    our_left = CHUNK_SIZE;
+  }
+  ptr = our_chunk;
+  our_chunk += size;
+  our_left  -= size;
+
+  return ptr;
+}
+
+
 /* lookup_digest() tries returns the number of times
    we have seen this digest
 */
@@ -75,7 +103,7 @@ lookup_digest(DL_digest *digest, int *new)
     }
   }
 
-  if ( (c = malloc(sizeof(*c))) )
+  if ( (c = our_malloc(sizeof(*c))) )
   { c->digest  = *digest;
     c->id      = ++context_id;
     c->count   = 1;
