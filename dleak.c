@@ -12,6 +12,8 @@
 #define FALSE 0
 #endif
 
+#undef EXIT_DUMP_CONTEXTS
+
 static int   DL_context_depth = 5;
 static FILE *logfd;
 static pthread_mutex_t locklogfd = PTHREAD_MUTEX_INITIALIZER;
@@ -21,7 +23,9 @@ static void* (*mallocp)(size_t);
 static void* (*reallocp)(void*,size_t);
 static void  (*freep)(void*);
 
+#ifdef EXIT_DUMP_CONTEXTS
 static void  dump_contexts(void);
+#endif
 
 void
 DL_locklog(void)
@@ -42,7 +46,9 @@ init(void)
 
   logfd = stderr;
   unsetenv("LD_PRELOAD");		/* do not inject in sub-processes */
+#ifdef EXIT_DUMP_CONTEXTS
   atexit(dump_contexts);
+#endif
 }
 
 static __thread int no_hook = 0;
@@ -147,9 +153,11 @@ free(void *ptr)
 }
 
 
+#ifdef EXIT_DUMP_CONTEXTS
 static void
 dump_contexts(void)
 { no_hook = TRUE;
   DL_dump_contexts();
   no_hook = FALSE;
 }
+#endif

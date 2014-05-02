@@ -138,10 +138,10 @@ print_calling_context(FILE *fd, int id, void **ret_addresses, int depth)
     { uintptr_t offset = (uintptr_t)addr - (uintptr_t)info.dli_fbase;
 
       if ( info.dli_fname )
-      { fprintf(fd, "'%s'(%p)\n",
+      { fprintf(fd, "'%s'+%p\n",
 		info.dli_fname, (void*)offset);
       } else
-      { fprintf(fd, "??");
+      { fprintf(fd, "\'??\'");
       }
     }
   }
@@ -154,6 +154,7 @@ print_calling_context(FILE *fd, int id, void **ret_addresses, int depth)
 int
 DL_calling_context(int depth)
 { void *buffer[depth];
+  void **addrs = buffer+1;
   int d;
 
   if ( (d=backtrace(buffer, depth)) > 0 )
@@ -162,13 +163,14 @@ DL_calling_context(int depth)
     dcell *c;
     int new;
 
+    d--;				/* skip ourselves */
     md5_init(&state);
-    md5_append(&state, (const md5_byte_t *)buffer, (int)(d*sizeof(void*)));
+    md5_append(&state, (const md5_byte_t *)addrs, (int)(d*sizeof(void*)));
     md5_finish(&state, digest.v.bytes);
 
     if ( (c=lookup_digest(&digest, &new)) )
     { if ( new )
-	print_calling_context(stderr, c->id, buffer, d);
+	print_calling_context(stderr, c->id, addrs, d);
       return c->id;
     }
   }
