@@ -127,7 +127,7 @@ context(Stack) -->
 
 stack([]) --> [].
 stack([H|T]) -->
-	[ '    ~p'-[H], nl ],
+	[ '    ~w'-[H], nl ],
 	stack(T).
 
 addr2line(SO+Offset, Human) :-
