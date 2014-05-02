@@ -1,7 +1,7 @@
-#!/home/janw/bin/swipl
+#!/usr/bin/env swipl
 
 :- set_prolog_flag(verbose, silent).
-:- use_module(dlink).
+:- use_module(dleak).
 
 :- initialization
 	main, halt.

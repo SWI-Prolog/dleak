@@ -132,6 +132,7 @@ stack([H|T]) -->
 
 addr2line(SO+Offset, Human) :-
 	location(SO, Offset, Human), !.
+addr2line(SO+nil, SO) :- !.
 addr2line(SO+Offset, Human) :-
 	format(string(Cmd), 'addr2line -fe "~w" 0x~16r', [SO, Offset]),
 	setup_call_cleanup(

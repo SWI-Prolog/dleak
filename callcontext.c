@@ -15,6 +15,8 @@
 #define FALSE 0
 #endif
 
+#include "murmur.c"
+
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 #define LOCK()   pthread_mutex_lock(&lock)
 #define UNLOCK() pthread_mutex_unlock(&lock)
@@ -29,8 +31,9 @@ typedef struct DL_digest
 typedef size_t count_t;
 
 typedef struct dcell
-{ DL_digest     digest;
-  struct dcell *next;
+{ struct dcell *next;
+  int		depth;			/* depth of call-stack */
+  void	      **stack;			/* Return addresses */
   int		id;
   count_t	count;			/* number of times seen */
 } dcell;
@@ -83,13 +86,20 @@ our_malloc(size_t size)
    we have seen this digest
 */
 
+static unsigned int
+stack_hash(int depth, void **stack)
+{ return murmer_hash(stack, sizeof(*stack)*depth, 0x14e86b12);
+}
+
+
 static dcell *
-lookup_digest(DL_digest *digest, int *new)
-{ int k = digest->v.ints[0] % DIGEST_HASH_SIZE;
+lookup_backtrace(int depth, void **stack, int *new)
+{ int k = stack_hash(depth, stack) % DIGEST_HASH_SIZE;
   dcell *c;
 
   for(c=buckets[k]; c; c = c->next)
-  { if ( memcmp(digest, &c->digest, sizeof(*digest)) == 0 )
+  { if ( depth == c->depth &&
+	 memcmp(stack, c->stack, depth*sizeof(*stack)) == 0 )
     { __sync_fetch_and_add(&c->count, 1);
       DEBUG(1, fprintf(stderr, "Existing context %d\n", c->id));
       *new = FALSE;
@@ -98,7 +108,8 @@ lookup_digest(DL_digest *digest, int *new)
   }
   LOCK();
   for(c=buckets[k]; c; c = c->next)
-  { if ( memcmp(digest, &c->digest, sizeof(*digest)) == 0 )
+  { if ( depth == c->depth &&
+	 memcmp(stack, c->stack, depth*sizeof(*stack)) == 0 )
     { UNLOCK();
       __sync_fetch_and_add(&c->count, 1);
       DEBUG(1, fprintf(stderr, "Existing context %d\n", c->id));
@@ -107,8 +118,10 @@ lookup_digest(DL_digest *digest, int *new)
     }
   }
 
-  if ( (c = our_malloc(sizeof(*c))) )
-  { c->digest  = *digest;
+  if ( (c = our_malloc(sizeof(*c))) &&
+       (c->stack = our_malloc(depth*sizeof(*stack))) )
+  { memcpy(c->stack, stack, depth*sizeof(*stack));
+    c->depth   = depth;
     c->id      = ++context_id;
     c->count   = 1;
     c->next    = buckets[k];
@@ -138,15 +151,13 @@ print_calling_context(FILE *fd, int id, void **ret_addresses, int depth)
     if ( i > 0 )
       fprintf(fd, ",");
 
-    if ( dladdr(addr, &info) )
+    if ( dladdr(addr, &info) && info.dli_fname )
     { uintptr_t offset = (uintptr_t)addr - (uintptr_t)info.dli_fbase;
 
-      if ( info.dli_fname )
-      { fprintf(fd, "'%s'+%p",
-		info.dli_fname, (void*)offset);
-      } else
-      { fprintf(fd, "\'??\'");
-      }
+      fprintf(fd, "'%s'+%p",
+	      info.dli_fname, (void*)offset);
+    } else
+    { fprintf(fd, "%p", addr);
     }
   }
 
@@ -161,18 +172,11 @@ DL_calling_context(FILE *logfd, int depth)
   void **addrs = buffer+1;
   int d;
 
-  if ( (d=backtrace(buffer, depth)) > 0 )
-  { DL_digest digest;
-    md5_state_t state;
-    dcell *c;
+  if ( (d=backtrace(buffer, depth)-1) > 0 )
+  { dcell *c;
     int new;
 
-    d--;				/* skip ourselves */
-    md5_init(&state);
-    md5_append(&state, (const md5_byte_t *)addrs, (int)(d*sizeof(void*)));
-    md5_finish(&state, digest.v.bytes);
-
-    if ( (c=lookup_digest(&digest, &new)) )
+    if ( (c=lookup_backtrace(d, addrs, &new)) )
     { if ( new )
 	print_calling_context(logfd, c->id, addrs, d);
       return c->id;

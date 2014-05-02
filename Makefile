@@ -1,9 +1,9 @@
 all: dleak.so
 
-SRC=dleak.c md5.c callcontext.c
+SRC=dleak.c callcontext.c
 
 dleak.so: $(SRC)
-	gcc -Wall -O2 -g -pthread -shared -fPIC -o dleak.so $(SRC) -ldl
+	gcc -Wall -g -pthread -shared -fPIC -o dleak.so $(SRC) -ldl
 
 distclean: clean
 	rm -f dleak.so
