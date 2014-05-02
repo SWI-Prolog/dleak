@@ -16,13 +16,25 @@ dleak(File) :-
 
 process(In) :-
 	read(In, Term),
-	process(Term, In).
+	process(Term, In, dleak{ events:0,
+				 contexts:0,
+				 malloc:0,
+				 calloc:0,
+				 realloc:0,
+				 free:0,
+				 total:0
+			       }).
 
-process(end_of_file, _) :- !.
-process(Term, In) :-
-	action(Term),
+process(end_of_file, _, _) :- !.
+process(Term, In, State) :-
+	action(Term, State),
+	inc(events, State, 1),
+	(   State.events mod 10000 =:= 0
+	->  format(user_error, '~p~n', [State])
+	;   true
+	),
 	read(In, Term2),
-	process(Term2, In).
+	process(Term2, In, State).
 
 :- dynamic
 	cc/2,				% calling context
@@ -34,26 +46,40 @@ cleanup :-
 	retractall(chunk(_,_,_)),
 	retractall(location(_,_,_)).
 
-action(cc(Id, Stack)) :-
+inc(Field, State, Extra) :-
+	New is State.Field+Extra,
+	nb_set_dict(Field, State, New).
+
+action(cc(Id, Stack), State) :-
+	inc(contexts, State, 1),
 	assertz(cc(Id, Stack)).
-action(malloc(Ctx,Size,Ptr)) :-
+action(malloc(Ctx,Size,Ptr), State) :-
+	inc(malloc, State, 1),
+	inc(total, State, Size),
 	assertz(chunk(Ptr,Size,Ctx)).
-action(calloc(Ctx,N,Len,Ptr)) :-
+action(calloc(Ctx,N,Len,Ptr), State) :-
 	Size is N*Len,
+	inc(calloc, State, 1),
+	inc(total, State, Size),
 	assertz(chunk(Ptr,Size,Ctx)).
-action(realloc(Ctx,Ptr,Size,NPtr)) :-
+action(realloc(Ctx,Ptr,Size,NPtr), State) :-
+	inc(realloc, State, 1),
+	(   Ptr == nil
+	->  inc(total, State, Size),
+	    assertz(chunk(NPtr,Size,Ctx))
+	;   retract(chunk(Ptr,OSize,_))
+	->  Added is Size-OSize,
+	    inc(total, State, Added),
+	    assertz(chunk(NPtr,Size,Ctx))
+	;   print_message(error, realloc(Ctx,Ptr,Size,NPtr)),
+	    abort
+	).
+action(free(Ctx,Ptr), State) :-
+	inc(free, State, 1),
 	(   Ptr == nil
 	->  true
-	;   retract(chunk(Ptr,_,_))
-	->  true
-	;   print_message(error, realloc(Ctx,Ptr,Size))
-	),
-	assertz(chunk(NPtr,Size,Ctx)).
-action(free(Ctx,Ptr)) :-
-	(   Ptr == nil
-	->  true
-	;   retract(chunk(Ptr,_,_))
-	->  true
+	;   retract(chunk(Ptr,OSize,_))
+	->  inc(total, State, -OSize)
 	;   print_message(error, free(Ctx,Ptr))
 	).
 
@@ -84,6 +110,14 @@ prolog:message(not_freed(Ctx, Count, Bytes)) -->
 	{ cc(Ctx, Stack) },
 	[ '~d bytes not freed in ~D allocations at (ctx=~d)'-
 	  [Bytes,Count, Ctx], nl],
+	context(Stack).
+prolog:message(realloc(Ctx,Ptr,_Size,_NPtr)) -->
+	{ cc(Ctx, Stack) },
+	[ 'realloc() of unknown pointer 0x~16r'-[Ptr], nl ],
+	context(Stack).
+prolog:message(free(Ctx,Ptr)) -->
+	{ cc(Ctx, Stack) },
+	[ 'free() of unknown pointer 0x~16r'-[Ptr], nl ],
 	context(Stack).
 
 context(Stack) -->
