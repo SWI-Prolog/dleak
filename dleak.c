@@ -25,6 +25,7 @@ init(void)
   reallocp  = (void*(*)(void*,size_t)) dlsym(RTLD_NEXT, "realloc");
   freep     = (void (*)(void *))       dlsym(RTLD_NEXT, "free");
 
+  unsetenv("LD_PRELOAD");		/* do not inject in sub-processes */
   atexit(dump_contexts);
 }
 
