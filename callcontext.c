@@ -40,9 +40,13 @@ typedef struct dcell
 
 static dcell *buckets[DIGEST_HASH_SIZE];
 static int    context_id = 0;
-static int    debug_level = 1;
 
+#ifdef O_DEBUG
+static int    debug_level = 1;
 #define DEBUG(l,g) do { if ( (l) <= debug_level ) {g;} } while(0)
+#else
+#define DEBUG(l,g) (void)0
+#endif
 
 #if 0
 static char *digest_chars(DL_digest *digest);
@@ -138,7 +142,7 @@ print_calling_context(FILE *fd, int id, void **ret_addresses, int depth)
     { uintptr_t offset = (uintptr_t)addr - (uintptr_t)info.dli_fbase;
 
       if ( info.dli_fname )
-      { fprintf(fd, "'%s'+%p\n",
+      { fprintf(fd, "'%s'+%p",
 		info.dli_fname, (void*)offset);
       } else
       { fprintf(fd, "\'??\'");
