@@ -38,7 +38,9 @@ action(calloc(Ctx,N,Len,Ptr)) :-
 	Size is N*Len,
 	assertz(chunk(Ptr,Size,Ctx)).
 action(realloc(Ctx,Ptr,Size,NPtr)) :-
-	(   retract(chunk(Ptr,_,_))
+	(   Ptr == nil
+	->  true
+	;   retract(chunk(Ptr,_,_))
 	->  true
 	;   print_message(error, realloc(Ctx,Ptr,Size))
 	),
@@ -51,28 +53,37 @@ action(free(Ctx,Ptr)) :-
 	;   print_message(error, free(Ctx,Ptr))
 	).
 
+%%	report
+%
+%	Report not freed memory with its call stack
+
 report :-
 	findall(Ctx-mem(Ptr,Size), chunk(Ptr,Size,Ctx), NotFree),
 	keysort(NotFree, Sorted),
 	group_pairs_by_key(Sorted, Grouped),
-	maplist(not_freed, Grouped).
+	maplist(sum_not_freed, Grouped, Summed),
+	sort(Summed, ByLeak),
+	maplist(not_freed, ByLeak).
 
-not_freed(Ctx-Mems) :-
+sum_not_freed(Ctx-Mems, not_freed(Bytes,Count,Ctx)) :-
 	length(Mems, Count),
 	maplist(arg(2), Mems, Sizes),
-	sum_list(Sizes, Bytes),
+	sum_list(Sizes, Bytes).
+
+not_freed(not_freed(Bytes,Count,Ctx)) :-
 	print_message(warning, not_freed(Ctx, Count, Bytes)).
 
 
 :- multifile prolog:message//1.
 
 prolog:message(not_freed(Ctx, Count, Bytes)) -->
-	[ '~d bytes not freed in ~D allocations at'-[Bytes,Count], nl],
-	context(Ctx).
+	{ cc(Ctx, Stack) },
+	[ '~d bytes not freed in ~D allocations at (ctx=~d)'-
+	  [Bytes,Count, Ctx], nl],
+	context(Stack).
 
-context(Ctx) -->
-	{ cc(Ctx, Stack),
-	  maplist(addr2line, Stack, Human)
+context(Stack) -->
+	{ maplist(addr2line, Stack, Human)
 	},
 	stack(Human).
 
@@ -83,7 +94,7 @@ stack([H|T]) -->
 
 addr2line(SO+Offset, Human) :-
 	location(SO, Offset, Human), !.
-addr2line(SO+Offset, SO+Offset=Human) :-
+addr2line(SO+Offset, Human) :-
 	format(string(Cmd), 'addr2line -fe "~w" 0x~16r', [SO, Offset]),
 	setup_call_cleanup(
 	    open(pipe(Cmd), read, In),
