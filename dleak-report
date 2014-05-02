@@ -1,0 +1,11 @@
+#!/home/janw/bin/swipl
+
+:- set_prolog_flag(verbose, silent).
+:- use_module(dlink).
+
+:- initialization
+	main, halt.
+
+main :-
+	current_prolog_flag(argv, [File]),
+	dleak(File).
