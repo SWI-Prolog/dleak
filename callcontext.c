@@ -135,6 +135,7 @@ static void
 print_calling_context(FILE *fd, int id, void **ret_addresses, int depth)
 { size_t i;
 
+  DL_locklog();
   fprintf(fd, "cc(%d, [", id);
 
   for(i=0; i<depth; i++)
@@ -166,6 +167,7 @@ print_calling_context(FILE *fd, int id, void **ret_addresses, int depth)
   }
 
   fprintf(fd, "]).\n");
+  DL_unlocklog();
 }
 
 
