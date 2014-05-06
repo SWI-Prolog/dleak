@@ -7,7 +7,6 @@
 #include <stdio.h>
 #include <sys/mman.h>
 #include "callcontext.h"
-#include "md5.h"
 #include <pthread.h>
 
 #ifndef TRUE
@@ -20,13 +19,6 @@
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 #define LOCK()   pthread_mutex_lock(&lock)
 #define UNLOCK() pthread_mutex_unlock(&lock)
-
-typedef struct DL_digest
-{ union
-  { md5_byte_t   bytes[16];
-    unsigned int ints[16/sizeof(int)];
-  } v;
-} DL_digest;
 
 typedef size_t count_t;
 
