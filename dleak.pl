@@ -68,21 +68,21 @@ action(cc(Id, Stack), State) :-
 action(malloc(Ctx,Size,Ptr), State) :-
 	inc(malloc, State, 1),
 	inc(total, State, Size),
-	assertz(chunk(Ptr,Size,Ctx)).
+	asserta(chunk(Ptr,Size,Ctx)).
 action(calloc(Ctx,N,Len,Ptr), State) :-
 	Size is N*Len,
 	inc(calloc, State, 1),
 	inc(total, State, Size),
-	assertz(chunk(Ptr,Size,Ctx)).
+	asserta(chunk(Ptr,Size,Ctx)).
 action(realloc(Ctx,Ptr,Size,NPtr), State) :-
 	inc(realloc, State, 1),
 	(   Ptr == nil
 	->  inc(total, State, Size),
-	    assertz(chunk(NPtr,Size,Ctx))
+	    asserta(chunk(NPtr,Size,Ctx))
 	;   retract(chunk(Ptr,OSize,_))
 	->  Added is Size-OSize,
 	    inc(total, State, Added),
-	    assertz(chunk(NPtr,Size,Ctx))
+	    asserta(chunk(NPtr,Size,Ctx))
 	;   print_message(error, realloc(Ctx,Ptr,Size,NPtr)),
 	    abort
 	).
