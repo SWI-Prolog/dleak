@@ -22,15 +22,27 @@ process(In) :-
 				 calloc:0,
 				 realloc:0,
 				 free:0,
-				 total:0
+				 total:0,
+				 wtime:0
 			       }).
+
+wtime(MS) :-
+	get_time(T),
+	MS is round(T*1000.0).
+
+wtime(State, Time) :-
+	wtime(Wtime),
+	Time is Wtime - State.wtime,
+	nb_set_dict(wtime, State, Wtime).
+
 
 process(end_of_file, _, _) :- !.
 process(Term, In, State) :-
 	action(Term, State),
 	inc(events, State, 1),
 	(   State.events mod 10000 =:= 0
-	->  format(user_error, '~p~n', [State])
+	->  wtime(State, Time),
+	    format(user_error, '~p (~D)~n', [State, Time])
 	;   true
 	),
 	read(In, Term2),
