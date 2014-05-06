@@ -6,7 +6,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <sys/mman.h>
-#include "callcontext.h"
+#include "dleak.h"
 #include <pthread.h>
 
 #ifndef TRUE
@@ -130,36 +130,39 @@ lookup_backtrace(int depth, void **stack, int *new)
 
 
 static void
-print_calling_context(FILE *fd, int id, void **ret_addresses, int depth)
-{ size_t i;
+print_calling_context(int id, void **ret_addresses, int depth)
+{ FILE *fd;
 
-  DL_locklog();
-  fprintf(fd, "cc(%d, [", id);
+  if ( (fd=DL_get_logfd()) )
+  { size_t i;
 
-  for(i=0; i<depth; i++)
-  { Dl_info info;
-    void *addr = ret_addresses[i];
+    fprintf(fd, "cc(%d, [", id);
 
-    if ( i > 0 )
-      fprintf(fd, ",");
+    for(i=0; i<depth; i++)
+    { Dl_info info;
+      void *addr = ret_addresses[i];
 
-    if ( dladdr(addr, &info) && info.dli_fname )
-    { uintptr_t offset = (uintptr_t)addr - (uintptr_t)info.dli_fbase;
+      if ( i > 0 )
+	fprintf(fd, ",");
 
-      fprintf(fd, "'%s'+%p",
-	      info.dli_fname, (void*)offset);
-    } else
-    { fprintf(fd, "%p", addr);
+      if ( dladdr(addr, &info) && info.dli_fname )
+      { uintptr_t offset = (uintptr_t)addr - (uintptr_t)info.dli_fbase;
+
+	fprintf(fd, "'%s'+%p",
+		info.dli_fname, (void*)offset);
+      } else
+      { fprintf(fd, "%p", addr);
+      }
     }
-  }
 
-  fprintf(fd, "]).\n");
-  DL_unlocklog();
+    fprintf(fd, "]).\n");
+    DL_release_logfd();
+  }
 }
 
 
 int
-DL_calling_context(FILE *logfd, int depth)
+DL_calling_context(int depth)
 { void *buffer[depth];
   void **addrs = buffer+1;
   int d;
@@ -170,7 +173,7 @@ DL_calling_context(FILE *logfd, int depth)
 
     if ( (c=lookup_backtrace(d, addrs, &new)) )
     { if ( new )
-	print_calling_context(logfd, c->id, addrs, d);
+	print_calling_context(c->id, addrs, d);
       return c->id;
     }
   }

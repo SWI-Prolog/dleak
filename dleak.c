@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
-#include "callcontext.h"
+#include "dleak.h"
 #include "pthread.h"
 
 #ifndef TRUE
@@ -28,14 +28,17 @@ static void  (*freep)(void*);
 static void  dump_contexts(void);
 #endif
 
-void
-DL_locklog(void)
+FILE *
+DL_get_logfd(void)
 { pthread_mutex_lock(&locklogfd);
+  no_hook++;
+  return logfd;
 }
 
 void
-DL_unlocklog(void)
+DL_release_logfd(void)
 { pthread_mutex_unlock(&locklogfd);
+  no_hook--;
 }
 
 static void __attribute__((constructor))
@@ -62,13 +65,15 @@ malloc(size_t len)
   } else
   { void *ptr;
     int cctx;
+    FILE *fd;
 
     no_hook = TRUE;
-    cctx = DL_calling_context(logfd, DL_context_depth);
+    cctx = DL_calling_context(DL_context_depth);
     ptr = (*mallocp)(len);
-    DL_locklog();
-    fprintf(logfd, "malloc(%d,%ld,%p).\n", cctx, (long)len, ptr);
-    DL_unlocklog();
+    if ( (fd=DL_get_logfd()) )
+    { fprintf(fd, "malloc(%d,%ld,%p).\n", cctx, (long)len, ptr);
+      DL_release_logfd();
+    }
     no_hook = FALSE;
 
     return ptr;
@@ -101,14 +106,16 @@ calloc(size_t nmemb, size_t size)
   } else
   { void *ptr;
     int cctx;
+    FILE *fd;
 
     no_hook = TRUE;
-    cctx = DL_calling_context(logfd, DL_context_depth);
+    cctx = DL_calling_context(DL_context_depth);
     ptr = (*callocp)(nmemb, size);
-    DL_locklog();
-    fprintf(logfd, "calloc(%d,%ld,%ld,%p).\n",
-	    cctx, (long)nmemb, (long)size, ptr);
-    DL_unlocklog();
+    if ( (fd=DL_get_logfd()) )
+    { fprintf(fd, "calloc(%d,%ld,%ld,%p).\n",
+	      cctx, (long)nmemb, (long)size, ptr);
+      DL_release_logfd();
+    }
     no_hook = FALSE;
 
     return ptr;
@@ -123,13 +130,15 @@ realloc(void *ptr, size_t size)
   } else
   { void *nptr;
     int cctx;
+    FILE *fd;
 
     no_hook = TRUE;
-    cctx = DL_calling_context(logfd, DL_context_depth);
+    cctx = DL_calling_context(DL_context_depth);
     nptr = (*reallocp)(ptr, size);
-    DL_locklog();
-    fprintf(logfd, "realloc(%d,%p,%ld,%p).\n", cctx, ptr, (long)size, nptr);
-    DL_unlocklog();
+    if ( (fd=DL_get_logfd()) )
+    { fprintf(fd, "realloc(%d,%p,%ld,%p).\n", cctx, ptr, (long)size, nptr);
+      DL_release_logfd();
+    }
     no_hook = FALSE;
 
     return nptr;
@@ -143,13 +152,15 @@ free(void *ptr)
   { (*freep)(ptr);
   } else
   { int cctx;
+    FILE *fd;
 
     no_hook = TRUE;
-    cctx = DL_calling_context(logfd, DL_context_depth);
+    cctx = DL_calling_context(DL_context_depth);
     (*freep)(ptr);
-    DL_locklog();
-    fprintf(logfd, "free(%d,%p).\n", cctx, ptr);
-    DL_unlocklog();
+    if ( (fd=DL_get_logfd()) )
+    { fprintf(fd, "free(%d,%p).\n", cctx, ptr);
+      DL_release_logfd();
+    }
     no_hook = FALSE;
   }
 }
