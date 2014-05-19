@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include <malloc.h>
+#include <string.h>
 #include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,7 +15,9 @@
 
 #undef EXIT_DUMP_CONTEXTS
 
-static int   DL_context_depth = 5;
+static int   DL_context_depth = 6;
+static char *DL_logfile = "dleak.log";
+
 static FILE *logfd;
 static pthread_mutex_t locklogfd = PTHREAD_MUTEX_INITIALIZER;
 static __thread int no_hook = 0;
@@ -41,6 +44,21 @@ DL_release_logfd(void)
   no_hook--;
 }
 
+
+static int
+setup_options(void)
+{ char *s;
+  int d;
+
+  if ( (s = getenv("DLEAK_DEPTH")) && (d=atoi(s)) > 0 )
+    DL_context_depth = d;
+  if ( (s = getenv("DLEAK_FILE")) )
+    DL_logfile = strdup(s);
+
+  return TRUE;
+}
+
+
 static void __attribute__((constructor))
 init(void)
 { callocp   = (void*(*)(size_t,size_t))dlsym(RTLD_NEXT, "calloc");
@@ -49,7 +67,8 @@ init(void)
   freep     = (void (*)(void *))       dlsym(RTLD_NEXT, "free");
 
   no_hook = TRUE;
-  logfd = fopen("dleak.log", "w");
+  setup_options();
+  logfd = fopen(DL_logfile, "w");
   no_hook = FALSE;
 
   unsetenv("LD_PRELOAD");		/* do not inject in sub-processes */
