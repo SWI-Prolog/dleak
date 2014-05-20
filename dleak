@@ -6,6 +6,7 @@ base=/home/janw/src/dleak
 DLEAK_DEPTH=5
 DLEAK_FILE=dleak.log
 report=no
+prog=$(basename $0)
 
 help()
 { cat << _EOM_
@@ -13,9 +14,9 @@ DLEAK: a dynamic memory leak debugger
 
 Usage:
 
-  - Recording: $0 [--depth=frame] [--log=file] program args
-  - Reporting: $0 --report [file]
-  - Usage:     $0 --help
+  - Recording: $prog [--depth=frame] [--log=file] program args
+  - Reporting: $prog --report [file]
+  - Usage:     $prog --help
 
 Only works on Linux (replies  on   ELF  and  glibc). Requires SWI-Prolog
 version 7 and  addr2line  programs.   Works  without  recompilation, but
@@ -40,6 +41,7 @@ while [ $done = false ]; do
 	;;
    --report)
 	report=yes;
+	shift
 	;;
    --help)
         help
@@ -64,4 +66,4 @@ fi
 
 LD_PRELOAD=$base/dleak.so DLEAK_FILE=$DLEAK_FILE DLEAK_DEPTH=$DLEAK_DEPTH "$@"
 
-echo Analyse using $0 --report $DLEAK_FILE
+echo Analyse using $prog --report $DLEAK_FILE
