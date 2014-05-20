@@ -1,0 +1,67 @@
+#!/bin/bash
+
+# [edit] Update to relect your installation location
+base=/home/janw/src/dleak
+
+DLEAK_DEPTH=5
+DLEAK_FILE=dleak.log
+report=no
+
+help()
+{ cat << _EOM_
+DLEAK: a dynamic memory leak debugger
+
+Usage:
+
+  - Recording: $0 [--depth=frame] [--log=file] program args
+  - Reporting: $0 --report [file]
+  - Usage:     $0 --help
+
+Only works on Linux (replies  on   ELF  and  glibc). Requires SWI-Prolog
+version 7 and  addr2line  programs.   Works  without  recompilation, but
+information gets more detailed if the  program is compiled for debugging
+("-g" or "-gdwarf-2 -g3") and  without optimization (optimization looses
+stack context due to inlining and tail recursion optimization).
+
+Home: https://github.com/SWI-Prolog/dleak.git
+_EOM_
+}
+
+done=false
+while [ $done = false ]; do
+ case "$1" in
+   --depth=*)
+	DLEAK_DEPTH=$(echo $1 | sed 's/[^=]*=//')
+	shift
+	;;
+   --log=*)
+	DLEAK_FILE=$(echo $1 | sed 's/[^=]*=//')
+	shift
+	;;
+   --report)
+	report=yes;
+	;;
+   --help)
+        help
+	exit 0
+	;;
+   *) done=true
+        ;;
+ esac
+done
+
+if [ $report = yes ]; then
+  if [ ! -z "$1" ]; then
+    DLEAK_FILE="$1";
+  fi
+  exec $base/dleak-report $DLEAK_FILE
+fi
+
+if [ -z "$1" ]; then
+  help
+  exit 1
+fi
+
+LD_PRELOAD=$base/dleak.so DLEAK_FILE=$DLEAK_FILE DLEAK_DEPTH=$DLEAK_DEPTH "$@"
+
+echo Analyse using $0 --report $DLEAK_FILE
