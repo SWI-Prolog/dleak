@@ -1,7 +1,7 @@
 :- module(dleak,
 	  [ dleak/1			% +File
 	  ]).
-
+:- use_module(library(debug)).
 :- use_module(library(pairs)).
 :- use_module(library(apply)).
 :- use_module(library(lists)).
@@ -41,7 +41,8 @@ process(end_of_file, _, _) :- !.
 process(Term, In, State) :-
 	action(Term, State),
 	inc(events, State, 1),
-	(   State.events mod 100000 =:= 0
+	(   State.events mod 100000 =:= 0,
+	    debugging(progress)
 	->  wtime(State, Time),
 	    dump_state(State, Time)
 	;   true
