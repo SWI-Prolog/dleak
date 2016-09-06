@@ -17,13 +17,21 @@ Usage:
 
   - Recording: $prog [--depth=frame] [--log=file] program args
   - Reporting: $prog --report option ... [file]
-  - Usage:     $prog --help
+  - Usage: $prog --help
 
-Only works on Linux (replies  on   ELF  and  glibc). Requires SWI-Prolog
-version 7 and  addr2line  programs.   Works  without  recompilation, but
-information gets more detailed if the  program is compiled for debugging
-("-g" or "-gdwarf-2 -g3") and  without optimization (optimization looses
-stack context due to inlining and tail recursion optimization).
+This program grew out of frustration for a memory debugger that
+
+  - Is quick and easy to use
+  - Doesn't slow down the application too much
+  - Supports threaded applications
+  - Supports dynamically loaded libraries
+
+Only works on Linux  (relies  on  the   ELF  binary  format  and glibc).
+Requires  swipl  (SWI-Prolog  version  7)  and  addr2line  programs  for
+reporting. Works without recompilation, but allocation context reporting
+gets more detailed if the program  is   compiled  for debugging ("-g" or
+"-gdwarf-2 -g3") and without optimization   because  optimization looses
+stack context due to inlining and tail recursion optimization.
 
 Home: https://github.com/SWI-Prolog/dleak.git
 _EOM_

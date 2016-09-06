@@ -73,5 +73,6 @@ prolog:message(dleak(help)) -->
 	  'Options:'-[], nl, nl,
 	  '  --dump=N        Dump stats every N events'-[], nl,
 	  '  --top=N         Dump leak details for top N'-[], nl,
-	  '  --follow=N      Follow top N contexts'-[], nl
+	  '  --follow=N      Follow top N contexts'-[], nl,
+	  '  --interactive   Enter Prolog toplevel after loading data'-[], nl
 	].
