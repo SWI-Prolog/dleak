@@ -1,5 +1,9 @@
 :- module(dleak,
-	  [ dleak/2			% +File, +Options
+	  [ dleak/2,			% +File, +Options
+
+	    dump/2,			% ?Events, ?Contexts
+	    final_state/1,		% -State
+	    print_context/1		% +Context
 	  ]).
 :- use_module(library(option)).
 :- use_module(library(pairs)).
@@ -14,6 +18,7 @@ dleak(File, Options) :-
 	    process_log(In, Size, State, Options),
 	    close(In)),
 	report(Options),
+	assertz(final_state(State)),
 	dump_state(State, _, 0).
 
 process_log(In, Size, State, Options) :-
@@ -81,12 +86,16 @@ file_percentage(State, In, Perc) :-
 dump_top_contexts(State) :-
 	Count = State.get(follow),
 	Count > 0, !,
+	dump_top_contexts(State, Count).
+dump_top_contexts(_).
+
+dump_top_contexts(State, Count) :-
 	dict_pairs(State.context_info, _, Pairs),
 	sort(2, >=, Pairs, Decreasing),
 	top(Decreasing, Count, Top),
+	assertz(dump(State.events, Top)),
 	maplist(list_context, Top),
 	nl.
-dump_top_contexts(_).
 
 list_context(Ctx-Mem) :-
 	format(' ~d: ~D; ', [Ctx, Mem]).
@@ -99,17 +108,21 @@ top([H|T0], N, [H|T]) :-
 
 :- dynamic
 	cc/2,				% calling context
-	chunk/3,
-	location/3.			% Location caching
+	chunk/3,			% Ptr, Size, Context
+	location/3,			% Location caching
+	dump/2,				% Events, Top-N contexts
+	final_state/1.			% State
 
 cleanup :-
 	retractall(cc(_,_)),
 	retractall(chunk(_,_,_)),
-	retractall(location(_,_,_)).
+	retractall(location(_,_,_)),
+	retractall(dump(_,_)).
 
 inc(Field, State, Extra) :-
-	New is State.Field+Extra,
-	nb_set_dict(Field, State, New).
+	get_dict(Field, State, Value0),
+	Value is Value0+Extra,
+	nb_set_dict(Field, State, Value).
 
 inc_usage(State, Ctx, Extra) :-
 	get_dict(context_info, State, Info),
@@ -136,14 +149,16 @@ action(calloc(Ctx,N,Len,Ptr), State) :-
 	asserta(chunk(Ptr,Size,Ctx)).
 action(realloc(Ctx,Ptr,Size,NPtr), State) :-
 	inc(realloc, State, 1),
-	(   Ptr == nil
+	(   Ptr == nil			% realloc(NULL, size) == malloc(size)
 	->  inc(total, State, Size),
 	    inc_usage(State, Ctx, Size),
 	    asserta(chunk(NPtr,Size,Ctx))
 	;   retract(chunk(Ptr,OSize,OrigCtx))
 	->  Added is Size-OSize,
 	    inc(total, State, Added),
-	    inc_usage(State, OrigCtx, Added),
+	    Freed is - OSize,
+	    inc_usage(State, OrigCtx, Freed),
+	    inc_usage(State, Ctx, Size),
 	    asserta(chunk(NPtr,Size,Ctx))
 	;   print_message(error, realloc(Ctx,Ptr,Size,NPtr)),
 	    abort
@@ -198,6 +213,18 @@ skip(N, [_|T0], T) :-
 	skip(N1, T0, T).
 skip(_, List, List).
 
+
+%%	print_context(+Ctx)
+%
+%	Print a context (back trace trace).
+
+print_context(Ctx) :-
+	print_message(informational, cc(Ctx)).
+
+
+		 /*******************************
+		 *	      MESSAGES		*
+		 *******************************/
 
 :- multifile prolog:message//1.
 
