@@ -1,31 +1,45 @@
 :- module(dleak,
-	  [ dleak/1			% +File
+	  [ dleak/2			% +File, +Options
 	  ]).
-:- use_module(library(debug)).
+:- use_module(library(option)).
 :- use_module(library(pairs)).
 :- use_module(library(apply)).
 :- use_module(library(lists)).
 
-dleak(File) :-
+dleak(File, Options) :-
 	cleanup,
+	size_file(File, Size),
 	setup_call_cleanup(
 	    open(File, read, In),
-	    process(In),
+	    process_log(In, Size, State, Options),
 	    close(In)),
-	report.
+	report(Options),
+	dump_state(State, _, 0).
 
-process(In) :-
+process_log(In, Size, State, Options) :-
 	read(In, Term),
-	process(Term, In, dleak{ events:0,
-				 contexts:0,
-				 malloc:0,
-				 calloc:0,
-				 realloc:0,
-				 free:0,
-				 total:0,
-				 context_info:context{},
-				 wtime:0
-			       }).
+	option(follow(Follow), Options, 10),
+	State0 = dleak{ events:0,
+			contexts:0,
+			malloc:0,
+			calloc:0,
+			realloc:0,
+			free:0,
+			total:0,
+			context_info:context{},
+			wtime:0,
+			follow:Follow,
+			file_size:Size
+		      },
+	options_state(Options, State1),
+	put_dict(State1, State0, State),
+	process(Term, In, State).
+
+options_state([], []).
+options_state([dump(N)|T0], [dump-N|T]) :- !,
+	options_state(T0, T).
+options_state([_|T0], T) :-
+	options_state(T0, T).
 
 wtime(MS) :-
 	get_time(T),
@@ -41,32 +55,47 @@ process(end_of_file, _, _) :- !.
 process(Term, In, State) :-
 	action(Term, State),
 	inc(events, State, 1),
-	(   State.events mod 100000 =:= 0,
-	    debugging(progress)
+	(   Dump = State.get(dump),
+	    State.events mod Dump =:= 0
 	->  wtime(State, Time),
-	    dump_state(State, Time)
+	    dump_state(State, In, Time)
 	;   true
 	),
 	read(In, Term2),
 	process(Term2, In, State).
 
-dump_state(State, Time) :-
-	format('Events: ~D, memory: ~D (~D msec)~n',
-	       [State.events, State.total, Time]),
+dump_state(State, _, 0) :-
+	format('Events: ~D, memory: ~D, freed: ~D~n',
+	       [State.events, State.total, State.free]),
+	dump_top_contexts(State).
+dump_state(State, In, Time) :-
+	file_percentage(State, In, Perc),
+	format('Events: ~D, memory: ~D, freed: ~D (~D msec, ~1f%)~n',
+	       [State.events, State.total, State.free, Time, Perc]),
+	dump_top_contexts(State).
+
+file_percentage(State, In, Perc) :-
+	byte_count(In, Here),
+	Perc is ((Here*1000)//State.file_size)/10.
+
+dump_top_contexts(State) :-
+	Count = State.get(follow),
+	Count > 0, !,
 	dict_pairs(State.context_info, _, Pairs),
-	transpose_pairs(Pairs, BySize),
-	reverse(BySize, Decreasing),
-	list_contexts(Decreasing, 10),
+	sort(2, >=, Pairs, Decreasing),
+	top(Decreasing, Count, Top),
+	maplist(list_context, Top),
 	nl.
+dump_top_contexts(_).
 
-list_contexts([], _).
-list_contexts(_, 0) :- !.
-list_contexts([Mem-Ctx|T], N) :-
-	format(' ~d: ~D; ', [Ctx, Mem]),
+list_context(Ctx-Mem) :-
+	format(' ~d: ~D; ', [Ctx, Mem]).
+
+top([], _, []).
+top(_, 0, []) :- !.
+top([H|T0], N, [H|T]) :-
 	N2 is N - 1,
-	list_contexts(T, N2).
-
-
+	top(T0, N2, T).
 
 :- dynamic
 	cc/2,				% calling context
@@ -130,17 +159,22 @@ action(free(Ctx,Ptr), State) :-
 	;   print_message(error, free(Ctx,Ptr))
 	).
 
-%%	report
+%%	report(+Options)
 %
 %	Report not freed memory with its call stack
 
-report :-
+report(Options) :-
 	findall(Ctx-mem(Ptr,Size), chunk(Ptr,Size,Ctx), NotFree),
 	keysort(NotFree, Sorted),
 	group_pairs_by_key(Sorted, Grouped),
 	maplist(sum_not_freed, Grouped, Summed),
 	sort(Summed, ByLeak),
-	maplist(not_freed, ByLeak).
+	(   option(top(N), Options, 100),
+	    N \== all
+	->  bottom(ByLeak, N, List)
+	;   List = ByLeak
+	),
+	maplist(not_freed, List).
 
 sum_not_freed(Ctx-Mems, not_freed(Bytes,Count,Ctx)) :-
 	length(Mems, Count),
@@ -149,6 +183,20 @@ sum_not_freed(Ctx-Mems, not_freed(Bytes,Count,Ctx)) :-
 
 not_freed(not_freed(Bytes,Count,Ctx)) :-
 	print_message(warning, not_freed(Ctx, Count, Bytes)).
+
+bottom(List, N, Bottom) :-
+	length(List, Len),
+	(   Len > N
+	->  Skip is Len - N,
+	    skip(Skip, List, Bottom)
+	;   Bottom = List
+	).
+
+skip(N, [_|T0], T) :-
+	N > 0, !,
+	N1 is N - 1,
+	skip(N1, T0, T).
+skip(_, List, List).
 
 
 :- multifile prolog:message//1.
