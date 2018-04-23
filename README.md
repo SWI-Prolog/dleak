@@ -25,6 +25,20 @@ There are lots of things that could be improved.  To name a few:
   - Provide a nice graphical display that shows the real time and allows
     you getting information about the gathered contexts
 
+## Yes, there are alternatives!
+
+  - Finally, there is [heaptrack](https://github.com/KDE/heaptrack)
+    which is really cool!  Seems to do all I was after and provides
+    a nice and fast GUI to dig into the results.
+  - From the usual classical suspects, I use these when appropriate:
+    - [valgrind](http://valgrind.org/).  Great. Only, your program
+      gets about 20 times slower.  If you can afford that, go for it.
+    - The gcc/clang `-fsanitize=XXX` options.  Not easy to use, but
+      can do real good work on complicated and CPU hungry programs.
+    - [efence](https://elinux.org/Electric_Fence) is nice for a quick
+      test.  As every allocation uses VM though, it doesn't scale for
+      programs doing a lot of small allocations.
+
 ## License
 
 Dleak is public domain software. If you have improvements, please send a
